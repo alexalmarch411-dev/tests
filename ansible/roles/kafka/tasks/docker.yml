@@ -32,21 +32,21 @@
       - "{{ kafka_controller_port }}:{{ kafka_controller_port }}"
     volumes:
       - "{{ kafka_host_data_dir }}/data:{{ kafka_data_dir }}"
-      - "{{ kafka_host_data_dir }}/server.properties:/etc/kafka/server.properties:ro"
-      - "{{ kafka_host_data_dir }}/log4j.properties:/opt/kafka/config/log4j.properties:ro"
-      - "{{ kafka_host_log_dir }}:/var/log/kafka"
+      # Образ apache/kafka читает смонтированные конфиги из /mnt/shared/config
+      - "{{ kafka_host_data_dir }}/server.properties:/mnt/shared/config/server.properties:ro"
+      # Логи пишутся в ${kafka.logs.dir} = /opt/kafka/logs внутри контейнера
+      - "{{ kafka_host_log_dir }}:/opt/kafka/logs"
     env:
+      CLUSTER_ID: "{{ kafka_cluster_id }}"
       KAFKA_NODE_ID: "{{ kafka_node_id | string }}"
       KAFKA_HEAP_OPTS: "{{ kafka_heap_opts }}"
       KAFKA_JVM_PERFORMANCE_OPTS: "{{ kafka_jvm_performance_opts }}"
-      KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:/opt/kafka/config/log4j.properties"
     ulimits:
       - "nofile:{{ common_ulimit_nofile }}:{{ common_ulimit_nofile }}"
     memory: "2g"
     memory_swap: "2g"
     oom_killer: true
     stop_timeout: 120
-    comparison: strict
   register: kafka_container_result
   tags: [kafka, docker, container]
 

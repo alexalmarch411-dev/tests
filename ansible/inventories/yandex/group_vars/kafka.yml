@@ -11,7 +11,7 @@ kafka_image: "apache/kafka:{{ kafka_version }}"
 # --- Cluster Identity ---
 # Cluster ID is generated once and stored persistently.
 # NEVER change this after initial deployment.
-kafka_cluster_id: "{{ lookup('file', 'files/kafka_cluster_id', errors='ignore') | default(lookup('pipe', 'uuidgen | tr [:upper:] [:lower:] | tr -d \\'\\\\n\\' | cut -c1-22'), true) }}"
+kafka_cluster_id: "{{ lookup('file', inventory_dir ~ '/files/kafka_cluster_id', errors='ignore') | default(lookup('pipe', 'uuidgen | tr [:upper:] [:lower:] | tr -d \\'\\\\n\\' | cut -c1-22'), true) }}"
 
 # --- Network Configuration ---
 # Внутренний IP хоста — используется для Kafka-трафика (advertised.listeners, quorum).
@@ -43,7 +43,10 @@ kafka_listeners: >-
 
 # Advertised listener — указывает клиентам и брокерам, куда подключаться.
 # Используется ВНУТРЕННИЙ IP: брокеры и клиенты внутри VPC общаются по нему.
-kafka_advertised_listeners: "CLIENT://{{ kafka_internal_ip }}:{{ kafka_client_port }}"
+# CONTROLLER также должен быть advertised (иначе Kafka подставит 0.0.0.0).
+kafka_advertised_listeners: >-
+  CLIENT://{{ kafka_internal_ip }}:{{ kafka_client_port }},
+  CONTROLLER://{{ kafka_internal_ip }}:{{ kafka_controller_port }}
 
 kafka_listener_security_protocol_map: "CLIENT:PLAINTEXT,CONTROLLER:PLAINTEXT"
 kafka_inter_broker_listener_name: "CLIENT"

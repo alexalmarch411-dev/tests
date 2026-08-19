@@ -7,9 +7,11 @@
   ansible.builtin.template:
     src: server.properties.j2
     dest: "{{ kafka_host_data_dir }}/server.properties"
-    owner: kafka
-    group: kafka
-    mode: "0640"
+    owner: root
+    group: root
+    # 0644: контейнер apache/kafka работает от appuser (UID 1000) и должен читать файл.
+    # Файл не содержит секретов (PLAINTEXT) — мирно-читаемый безопасно.
+    mode: "0644"
     backup: true
   notify: Restart Kafka container
   register: kafka_config_result
@@ -18,7 +20,7 @@
   ansible.builtin.template:
     src: log4j.properties.j2
     dest: "{{ kafka_host_data_dir }}/log4j.properties"
-    owner: kafka
-    group: kafka
-    mode: "0640"
+    owner: root
+    group: root
+    mode: "0644"
   notify: Restart Kafka container

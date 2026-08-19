@@ -44,7 +44,9 @@
       Changing node.id on existing data is NOT ALLOWED and would cause data loss.
     quiet: true
   when:
+    - kafka_meta_properties_stat is defined
     - kafka_meta_properties_stat.stat.exists
+    - kafka_existing_node_id is defined
     - kafka_existing_node_id.stdout | default('') | trim | length > 0
   tags: [kafka, safety]
 
@@ -58,7 +60,9 @@
       Changing cluster.id on existing data is NOT ALLOWED and would cause data loss.
     quiet: true
   when:
+    - kafka_meta_properties_stat is defined
     - kafka_meta_properties_stat.stat.exists
+    - kafka_existing_cluster_id is defined
     - kafka_existing_cluster_id.stdout | default('') | trim | length > 0
   tags: [kafka, safety]
 
@@ -66,7 +70,38 @@
   ansible.builtin.debug:
     msg: >-
       Kafka storage status:
-      directory_exists={{ kafka_data_dir_stat.stat.exists }},
-      initialized={{ kafka_meta_properties_stat.stat.exists }},
+      directory_exists={{ kafka_data_dir_stat.stat.exists | default(false) }},
+      initialized={{ kafka_meta_properties_stat.stat.exists | default(false) }},
       existing_cluster_id={{ kafka_existing_cluster_id.stdout | default('N/A') | trim }},
       existing_node_id={{ kafka_existing_node_id.stdout | default('N/A') | trim }}
+
+# Контейнер apache/kafka работает от appuser (UID 1000).
+# Родительская директория и данные должны быть доступны ему для чтения/записи,
+# иначе и kafka-storage format, и сам брокер упадут с AccessDenied.
+- name: Grant container user (UID 1000) access to Kafka storage parent
+  ansible.builtin.file:
+    path: "{{ kafka_host_data_dir }}"
+    owner: "1000"
+    group: "1000"
+    state: directory
+    mode: "0750"
+  tags: [kafka, storage]
+
+- name: Grant container user (UID 1000) access to Kafka data directory
+  ansible.builtin.file:
+    path: "{{ kafka_host_data_dir }}/data"
+    owner: "1000"
+    group: "1000"
+    state: directory
+    recurse: true
+    mode: "0750"
+  tags: [kafka, storage]
+
+- name: Grant container user (UID 1000) write access to Kafka log directory
+  ansible.builtin.file:
+    path: "{{ kafka_host_log_dir }}"
+    owner: "1000"
+    group: "1000"
+    state: directory
+    mode: "0750"
+  tags: [kafka, storage]

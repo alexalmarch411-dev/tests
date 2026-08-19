@@ -18,7 +18,6 @@
     sysctl_set: true
     state: present
     reload: true
-    persistent: true
   loop: "{{ common_sysctl_params | dict2items }}"
   tags: [common, sysctl]
 
@@ -32,11 +31,34 @@
     - "* hard nofile {{ common_ulimit_nofile }}"
   tags: [common, limits]
 
-- name: Ensure NTP is running
+- name: Check if systemd-timesyncd service exists
+  ansible.builtin.command: systemctl list-unit-files | grep -q systemd-timesyncd
+  register: common_timesyncd_check
+  changed_when: false
+  failed_when: false
+  tags: [common, ntp]
+
+- name: Ensure systemd-timesyncd is running
   ansible.builtin.systemd:
     name: systemd-timesyncd
     state: started
     enabled: true
+  when: common_timesyncd_check.rc == 0
+  tags: [common, ntp]
+
+- name: Install chrony when systemd-timesyncd is unavailable
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+  when: common_timesyncd_check.rc != 0
+  tags: [common, ntp]
+
+- name: Ensure chrony is running
+  ansible.builtin.systemd:
+    name: chrony
+    state: started
+    enabled: true
+  when: common_timesyncd_check.rc != 0
   tags: [common, ntp]
 
 - name: Create kafka system group

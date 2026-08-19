@@ -31,7 +31,8 @@
   ansible.builtin.command:
     cmd: >-
       docker run --rm
-      -v {{ kafka_host_data_dir }}:{{ kafka_data_dir }}
+      -v {{ kafka_host_data_dir }}/data:{{ kafka_data_dir }}
+      -v {{ kafka_host_data_dir }}/server.properties:/etc/kafka/server.properties:ro
       {{ kafka_image }}
       /opt/kafka/bin/kafka-storage.sh format
       -t {{ kafka_cluster_id }}
@@ -41,7 +42,6 @@
     creates: "{{ kafka_host_data_dir }}/data/__cluster_metadata-0/00000000000000000000.log"
   when: kafka_needs_kraft_format | bool
   register: kafka_kraft_format_result
-  notify: Restart Kafka container
 
 - name: Verify KRaft metadata after formatting
   ansible.builtin.stat:

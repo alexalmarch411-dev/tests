@@ -14,13 +14,14 @@
   ansible.builtin.include_tasks: storage.yml
   tags: [kafka, storage]
 
-- name: Include kraft tasks
-  ansible.builtin.include_tasks: kraft.yml
-  tags: [kafka, kraft]
-
+# Конфиг генерируется ДО format: kafka-storage.sh format требует server.properties
 - name: Include config tasks
   ansible.builtin.include_tasks: config.yml
   tags: [kafka, config]
+
+- name: Include kraft tasks
+  ansible.builtin.include_tasks: kraft.yml
+  tags: [kafka, kraft]
 
 - name: Include docker tasks
   ansible.builtin.include_tasks: docker.yml
