@@ -1,0 +1,105 @@
+---
+# ============================================================
+# Kafka Cluster Configuration
+# ============================================================
+
+# --- Kafka Version ---
+kafka_version: "3.9.0"
+kafka_scala_version: "2.13"
+kafka_image: "apache/kafka:{{ kafka_version }}"
+
+# --- Cluster Identity ---
+# Cluster ID is generated once and stored persistently.
+# NEVER change this after initial deployment.
+kafka_cluster_id: "{{ lookup('file', 'files/kafka_cluster_id', errors='ignore') | default(lookup('pipe', 'uuidgen | tr [:upper:] [:lower:] | tr -d \\'\\\\n\\' | cut -c1-22'), true) }}"
+
+# --- Network Configuration ---
+# Внутренний IP хоста — используется для Kafka-трафика (advertised.listeners, quorum).
+# Определён per-host в inventories/yandex/hosts.yml (переменная kafka_internal_ip).
+# Внешний (ansible_host) используется только для SSH.
+kafka_client_port: 9092
+kafka_controller_port: 9093
+kafka_jmx_port: 9999
+
+# --- KRaft Configuration ---
+# Combined mode: each node acts as both broker and controller.
+# For 3 nodes this is optimal — no need for dedicated controller nodes.
+kafka_process_roles: "broker,controller"
+
+# Controller quorum voters: all nodes participate in KRaft consensus.
+# Используется ВНУТРЕННИЙ IP — Kafka-ноды общаются по внутренней сети Yandex Cloud.
+kafka_controller_quorum_voters: >-
+  {% set voters = [] %}
+  {% for host in groups['kafka'] %}
+  {%   set _ = voters.append(hostvars[host]['kafka_node_id'] ~ '@' ~ hostvars[host]['kafka_internal_ip'] ~ ':' ~ kafka_controller_port) %}
+  {% endfor %}
+  {{ voters | join(',') }}
+
+# --- Listener Configuration ---
+# Separated listeners for client, inter-broker, and controller traffic.
+kafka_listeners: >-
+  CLIENT://0.0.0.0:{{ kafka_client_port }},
+  CONTROLLER://0.0.0.0:{{ kafka_controller_port }}
+
+# Advertised listener — указывает клиентам и брокерам, куда подключаться.
+# Используется ВНУТРЕННИЙ IP: брокеры и клиенты внутри VPC общаются по нему.
+kafka_advertised_listeners: "CLIENT://{{ kafka_internal_ip }}:{{ kafka_client_port }}"
+
+kafka_listener_security_protocol_map: "CLIENT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+kafka_inter_broker_listener_name: "CLIENT"
+kafka_controller_listener_names: "CONTROLLER"
+
+# --- Storage Configuration ---
+kafka_data_dir: "/var/lib/kafka/data"
+kafka_log_dirs: "/var/lib/kafka/data"
+
+# --- Topic Defaults ---
+kafka_num_partitions: 3
+kafka_default_replication_factor: 3
+kafka_min_insync_replicas: 2
+kafka_offsets_topic_replication_factor: 3
+kafka_transaction_state_log_replication_factor: 3
+kafka_transaction_state_log_min_isr: 2
+kafka_auto_create_topics_enable: false
+
+# --- Docker Configuration ---
+kafka_container_name: "kafka-broker"
+kafka_docker_network: "kafka-net"
+kafka_host_data_dir: "/var/lib/kafka"
+kafka_host_log_dir: "/var/log/kafka"
+
+# --- Resource Limits ---
+kafka_heap_opts: "-Xmx1G -Xms1G"
+kafka_jvm_performance_opts: >-
+  -server
+  -XX:+UseG1GC
+  -XX:MaxGCPauseMillis=20
+  -XX:InitiatingHeapOccupancyPercent=35
+  -XX:+ExplicitGCInvokesConcurrent
+  -XX:+HeapDumpOnOutOfMemoryError
+  -XX:+ExitOnOutOfMemoryError
+
+# --- Idempotency & Safety ---
+# CRITICAL: Set to true ONLY to force re-initialize storage.
+# This will DESTROY all data. Never enable in production.
+kafka_force_reinitialize: false
+
+# --- Monitoring ---
+kafka_jmx_enabled: true
+kafka_metrics_enabled: true
+
+# --- Topic Creation ---
+kafka_topics:
+  - name: "analytics.events"
+    partitions: 3
+    replication_factor: 3
+    config:
+      retention.ms: "604800000"  # 7 days
+      segment.bytes: "1073741824"  # 1 GB
+
+# --- Firewall ---
+kafka_firewall_enabled: true
+kafka_allowed_networks:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"

@@ -1,0 +1,114 @@
+---
+name: Ansible CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'ansible/**'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: YAML & Ansible Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install ansible-core ansible-lint yamllint
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: YAML lint
+        run: |
+          yamllint -d "{extends: default, rules: {line-length: {max: 200}, truthy: disable, comments-indentation: disable}}" \
+            inventories/ roles/ playbooks/
+
+      - name: Ansible syntax check
+        run: |
+          ansible-playbook -i inventories/yandex/hosts.yml playbooks/site.yml --syntax-check
+
+      - name: Ansible lint
+        run: |
+          ansible-lint playbooks/site.yml \
+            --exclude tests/ \
+            -x yaml[line-length],name[missing],yaml[truthy],no-changed-when,risky-shell-pipe
+
+  validate:
+    name: Validate Templates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install ansible-core jinja2
+
+      - name: Validate Jinja2 templates
+        run: |
+          python3 -c "
+          import jinja2, glob, sys
+          env = jinja2.Environment(loader=jinja2.FileSystemLoader('.'))
+          errors = []
+          for f in glob.glob('roles/*/templates/*.j2'):
+              try:
+                  env.get_template(f)
+              except Exception as e:
+                  errors.append(f'{f}: {e}')
+          if errors:
+              print('Template errors:')
+              for e in errors:
+                  print(f'  {e}')
+              sys.exit(1)
+          print('All templates valid')
+          "
+
+  security:
+    name: Security Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Checking for hardcoded secrets..."
+          if grep -rn "password\s*=\s*['\"]" roles/ inventories/ playbooks/ 2>/dev/null | grep -v "{{ " | grep -v "vault"; then
+            echo "WARNING: Potential hardcoded passwords found"
+            exit 1
+          fi
+          if grep -rn "api_key\s*=\s*['\"]" roles/ inventories/ playbooks/ 2>/dev/null | grep -v "{{ " | grep -v "vault"; then
+            echo "WARNING: Potential hardcoded API keys found"
+            exit 1
+          fi
+          echo "No hardcoded secrets found"

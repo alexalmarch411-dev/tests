@@ -1,0 +1,41 @@
+---
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - kafka_node_id is defined
+      - kafka_node_id | int > 0
+      - kafka_data_dir is defined
+      - kafka_cluster_id is defined
+      - kafka_cluster_id | length > 0
+    fail_msg: "Required Kafka variables are not defined or invalid"
+  tags: [kafka, validate]
+
+- name: Include storage tasks
+  ansible.builtin.include_tasks: storage.yml
+  tags: [kafka, storage]
+
+- name: Include kraft tasks
+  ansible.builtin.include_tasks: kraft.yml
+  tags: [kafka, kraft]
+
+- name: Include config tasks
+  ansible.builtin.include_tasks: config.yml
+  tags: [kafka, config]
+
+- name: Include docker tasks
+  ansible.builtin.include_tasks: docker.yml
+  tags: [kafka, docker]
+
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: kafka_firewall_enabled | default(true)
+  tags: [kafka, firewall]
+
+- name: Include topic tasks
+  ansible.builtin.include_tasks: topics.yml
+  run_once: true
+  tags: [kafka, topics]
+
+- name: Include health check tasks
+  ansible.builtin.include_tasks: healthcheck.yml
+  tags: [kafka, healthcheck]

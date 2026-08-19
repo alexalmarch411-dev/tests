@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS analytics.events_kafka (
+  event_id UUID,
+  user_id String,
+  event_type String,
+  timestamp DateTime64(3),
+  page String,
+  session_id String
+) ENGINE = Kafka()
+SETTINGS
+  bootstrap_servers = '{{ clickhouse_kafka_bootstrap_servers | trim }}',
+  topic = 'analytics.events',
+  group_name = 'clickhouse_analytics_consumer',
+  format = 'JSONEachRow',
+  num_consumers = 3,
+  skip_broken_messages = 100;

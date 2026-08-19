@@ -1,0 +1,71 @@
+---
+- name: Install Docker dependencies
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+  tags: [docker, packages]
+
+- name: Add Docker GPG key
+  ansible.builtin.apt_key:
+    url: "{{ docker_apt_key_url }}"
+    state: present
+  tags: [docker, packages]
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] {{ docker_apt_url }} {{ ansible_distribution_release }} stable"
+    state: present
+  tags: [docker, packages]
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: true
+  tags: [docker, packages]
+
+- name: Add ubuntu user to docker group
+  ansible.builtin.user:
+    name: ubuntu
+    groups: docker
+    append: true
+  tags: [docker, users]
+
+- name: Ensure Docker is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: true
+  tags: [docker, service]
+
+- name: Configure Docker daemon
+  ansible.builtin.copy:
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "50m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2",
+        "live-restore": true
+      }
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+  tags: [docker, config]
+
+- name: Install Docker Python SDK
+  ansible.builtin.pip:
+    name:
+      - docker
+      - docker-compose
+    state: present
+  tags: [docker, python]

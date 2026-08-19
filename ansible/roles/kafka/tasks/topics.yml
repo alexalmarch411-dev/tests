@@ -1,0 +1,56 @@
+---
+# ============================================================
+# Topic Management — IDEMPOTENT
+# Topics are created only if they don't exist.
+# Existing topics are NOT modified (to preserve data).
+# ============================================================
+
+- name: Wait for Kafka cluster to be ready
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ kafka_client_port }}"
+    timeout: 120
+    delay: 10
+  delegate_to: "{{ inventory_hostname }}"
+  tags: [kafka, topics]
+
+- name: Get existing topics
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-topics.sh
+      --bootstrap-server localhost:{{ kafka_client_port }}
+      --list
+  register: kafka_existing_topics
+  changed_when: false
+  retries: 5
+  delay: 5
+  until: kafka_existing_topics.rc == 0
+  tags: [kafka, topics]
+
+- name: Create Kafka topics
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-topics.sh
+      --bootstrap-server localhost:{{ kafka_client_port }}
+      --create
+      --topic {{ item.name }}
+      --partitions {{ item.partitions }}
+      --replication-factor {{ item.replication_factor }}
+      {% if item.config is defined %}
+      {% for key, value in item.config.items() %}
+      --config {{ key }}={{ value }}
+      {% endfor %}
+      {% endif %}
+  loop: "{{ kafka_topics }}"
+  when: item.name not in kafka_existing_topics.stdout_lines
+  register: kafka_topic_create_result
+  tags: [kafka, topics]
+
+- name: Display topic creation results
+  ansible.builtin.debug:
+    msg: "Topic '{{ item.item.name }}': {{ 'created' if item.changed else 'already exists' }}"
+  loop: "{{ kafka_topic_create_result.results | default([]) }}"
+  when: kafka_topic_create_result.results is defined
+  tags: [kafka, topics]

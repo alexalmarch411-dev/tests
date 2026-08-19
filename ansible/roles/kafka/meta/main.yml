@@ -1,0 +1,12 @@
+---
+# Kafka role metadata
+dependencies: []
+galaxy_info:
+  role_name: kafka
+  author: devops-team
+  description: Deploy Kafka cluster with KRaft using Docker
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble

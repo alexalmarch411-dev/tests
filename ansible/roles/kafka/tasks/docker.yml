@@ -1,0 +1,61 @@
+---
+# ============================================================
+# Docker Container Management — IDEMPOTENT
+# Using docker_container module, NOT shell commands
+# ============================================================
+
+- name: Create Docker network for Kafka
+  community.docker.docker_network:
+    name: "{{ kafka_docker_network }}"
+    state: present
+    driver: bridge
+  tags: [kafka, docker, network]
+
+- name: Pull Kafka Docker image
+  community.docker.docker_image:
+    name: "{{ kafka_image }}"
+    source: pull
+    force_source: false
+  tags: [kafka, docker, image]
+
+- name: Deploy Kafka container
+  community.docker.docker_container:
+    name: "{{ kafka_container_name }}"
+    image: "{{ kafka_image }}"
+    state: started
+    restart_policy: unless-stopped
+    restart: "{{ kafka_config_result is defined and kafka_config_result.changed | default(false) }}"
+    networks:
+      - name: "{{ kafka_docker_network }}"
+    ports:
+      - "{{ kafka_client_port }}:{{ kafka_client_port }}"
+      - "{{ kafka_controller_port }}:{{ kafka_controller_port }}"
+    volumes:
+      - "{{ kafka_host_data_dir }}/data:{{ kafka_data_dir }}"
+      - "{{ kafka_host_data_dir }}/server.properties:/etc/kafka/server.properties:ro"
+      - "{{ kafka_host_data_dir }}/log4j.properties:/opt/kafka/config/log4j.properties:ro"
+      - "{{ kafka_host_log_dir }}:/var/log/kafka"
+    env:
+      KAFKA_NODE_ID: "{{ kafka_node_id | string }}"
+      KAFKA_HEAP_OPTS: "{{ kafka_heap_opts }}"
+      KAFKA_JVM_PERFORMANCE_OPTS: "{{ kafka_jvm_performance_opts }}"
+      KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:/opt/kafka/config/log4j.properties"
+    ulimits:
+      - "nofile:{{ common_ulimit_nofile }}:{{ common_ulimit_nofile }}"
+    memory: "2g"
+    memory_swap: "2g"
+    oom_killer: true
+    stop_timeout: 120
+    comparison: strict
+  register: kafka_container_result
+  tags: [kafka, docker, container]
+
+- name: Wait for Kafka to become available
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ kafka_client_port }}"
+    timeout: 120
+    delay: 5
+    state: started
+  delegate_to: "{{ inventory_hostname }}"
+  tags: [kafka, docker, wait]

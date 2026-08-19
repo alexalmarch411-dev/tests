@@ -1,0 +1,17 @@
+---
+clickhouse_version: "24.8"
+clickhouse_image: "clickhouse/clickhouse-server:{{ clickhouse_version }}"
+clickhouse_container_name: "clickhouse"
+clickhouse_docker_network: "clickhouse-net"
+clickhouse_host_data_dir: "/var/lib/clickhouse"
+clickhouse_host_log_dir: "/var/log/clickhouse"
+clickhouse_http_port: 8123
+clickhouse_native_port: 9000
+# Bootstrap servers для ClickHouse Kafka Engine.
+# Используется ВНУТРЕННИЙ IP брокеров — ClickHouse и Kafka в одной VPC.
+clickhouse_kafka_bootstrap_servers: >-
+  {% set brokers = [] %}
+  {% for host in groups['kafka'] %}
+  {%   set _ = brokers.append(hostvars[host]['kafka_internal_ip'] ~ ':' ~ kafka_client_port) %}
+  {% endfor %}
+  {{ brokers | join(',') }}

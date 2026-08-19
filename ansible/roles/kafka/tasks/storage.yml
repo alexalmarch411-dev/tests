@@ -1,0 +1,72 @@
+---
+# ============================================================
+# Storage Management — IDEMPOTENT
+# Critical: NEVER destroy existing data
+# ============================================================
+
+- name: Check if Kafka data directory exists
+  ansible.builtin.stat:
+    path: "{{ kafka_host_data_dir }}/data"
+  register: kafka_data_dir_stat
+
+- name: Check if Kafka data directory is initialized (meta.properties)
+  ansible.builtin.stat:
+    path: "{{ kafka_host_data_dir }}/data/meta.properties"
+  register: kafka_meta_properties_stat
+
+- name: Read existing cluster ID from meta.properties
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -oP '(?<=cluster.id=).*' {{ kafka_host_data_dir }}/data/meta.properties 2>/dev/null || echo ""
+  args:
+    executable: /bin/bash
+  register: kafka_existing_cluster_id
+  changed_when: false
+  when: kafka_meta_properties_stat.stat.exists
+
+- name: Read existing node.id from meta.properties
+  ansible.builtin.shell: |
+    set -o pipefail
+    grep -oP '(?<=node.id=).*' {{ kafka_host_data_dir }}/data/meta.properties 2>/dev/null || echo ""
+  args:
+    executable: /bin/bash
+  register: kafka_existing_node_id
+  changed_when: false
+  when: kafka_meta_properties_stat.stat.exists
+
+- name: Verify node.id consistency
+  ansible.builtin.assert:
+    that:
+      - (kafka_existing_node_id.stdout | default('') | trim) == (kafka_node_id | string)
+    fail_msg: >-
+      CRITICAL: Existing node.id ({{ kafka_existing_node_id.stdout | default('') | trim }})
+      does not match configured node.id ({{ kafka_node_id }}).
+      Changing node.id on existing data is NOT ALLOWED and would cause data loss.
+    quiet: true
+  when:
+    - kafka_meta_properties_stat.stat.exists
+    - kafka_existing_node_id.stdout | default('') | trim | length > 0
+  tags: [kafka, safety]
+
+- name: Verify cluster.id consistency
+  ansible.builtin.assert:
+    that:
+      - (kafka_existing_cluster_id.stdout | default('') | trim) == (kafka_cluster_id | string)
+    fail_msg: >-
+      CRITICAL: Existing cluster.id ({{ kafka_existing_cluster_id.stdout | default('') | trim }})
+      does not match configured cluster.id ({{ kafka_cluster_id }}).
+      Changing cluster.id on existing data is NOT ALLOWED and would cause data loss.
+    quiet: true
+  when:
+    - kafka_meta_properties_stat.stat.exists
+    - kafka_existing_cluster_id.stdout | default('') | trim | length > 0
+  tags: [kafka, safety]
+
+- name: Display storage status
+  ansible.builtin.debug:
+    msg: >-
+      Kafka storage status:
+      directory_exists={{ kafka_data_dir_stat.stat.exists }},
+      initialized={{ kafka_meta_properties_stat.stat.exists }},
+      existing_cluster_id={{ kafka_existing_cluster_id.stdout | default('N/A') | trim }},
+      existing_node_id={{ kafka_existing_node_id.stdout | default('N/A') | trim }}

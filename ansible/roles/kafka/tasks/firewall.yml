@@ -1,0 +1,47 @@
+---
+# ============================================================
+# Firewall Configuration
+# Only allow necessary ports from trusted networks
+# ============================================================
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+  tags: [kafka, firewall]
+
+- name: Allow Kafka client port from trusted networks
+  community.general.ufw:
+    rule: allow
+    port: "{{ kafka_client_port | string }}"
+    proto: tcp
+    src: "{{ item }}"
+  loop: "{{ kafka_allowed_networks }}"
+  tags: [kafka, firewall]
+
+- name: Allow Kafka controller port from Kafka nodes only
+  community.general.ufw:
+    rule: allow
+    port: "{{ kafka_controller_port | string }}"
+    proto: tcp
+    src: "{{ hostvars[item]['kafka_internal_ip'] }}"
+  loop: "{{ groups['kafka'] }}"
+  tags: [kafka, firewall]
+
+- name: Allow JMX port from monitoring network
+  community.general.ufw:
+    rule: allow
+    port: "{{ kafka_jmx_port | string }}"
+    proto: tcp
+    src: "{{ item }}"
+  loop: "{{ kafka_allowed_networks }}"
+  when: kafka_jmx_enabled | default(true)
+  tags: [kafka, firewall]
+
+- name: Enable UFW with default deny
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+  tags: [kafka, firewall]

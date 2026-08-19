@@ -1,0 +1,57 @@
+---
+# ============================================================
+# KRaft Initialization — ONLY ONCE
+# ============================================================
+
+- name: Check if KRaft storage is already formatted
+  ansible.builtin.stat:
+    path: "{{ kafka_host_data_dir }}/data/__cluster_metadata-0/00000000000000000000.log"
+  register: kafka_kraft_meta_log
+
+- name: Determine if KRaft formatting is needed
+  ansible.builtin.set_fact:
+    kafka_needs_kraft_format: >-
+      {{ not kafka_kraft_meta_log.stat.exists and
+         not kafka_meta_properties_stat.stat.exists }}
+
+- name: Block force re-initialization check
+  ansible.builtin.assert:
+    that:
+      - kafka_force_reinitialize | default(false) | bool
+    fail_msg: >-
+      REFUSED: KRaft storage exists and kafka_force_reinitialize is false.
+      To force re-initialization (DESTROYS ALL DATA), set kafka_force_reinitialize: true.
+      This is a SAFETY MECHANISM to prevent accidental data loss.
+    quiet: true
+  when:
+    - kafka_meta_properties_stat.stat.exists
+    - kafka_force_reinitialize | default(false) | bool
+
+- name: Format KRaft storage (first-time initialization only)
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      -v {{ kafka_host_data_dir }}:{{ kafka_data_dir }}
+      {{ kafka_image }}
+      /opt/kafka/bin/kafka-storage.sh format
+      -t {{ kafka_cluster_id }}
+      -c /etc/kafka/server.properties
+      --ignore-formatted
+  args:
+    creates: "{{ kafka_host_data_dir }}/data/__cluster_metadata-0/00000000000000000000.log"
+  when: kafka_needs_kraft_format | bool
+  register: kafka_kraft_format_result
+  notify: Restart Kafka container
+
+- name: Verify KRaft metadata after formatting
+  ansible.builtin.stat:
+    path: "{{ kafka_host_data_dir }}/data/meta.properties"
+  register: kafka_meta_after_format
+  when: kafka_needs_kraft_format | bool
+
+- name: Fail if KRaft format did not create meta.properties
+  ansible.builtin.fail:
+    msg: "KRaft format completed but meta.properties was not created"
+  when:
+    - kafka_needs_kraft_format | bool
+    - not kafka_meta_after_format.stat.exists

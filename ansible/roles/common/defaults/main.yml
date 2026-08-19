@@ -1,0 +1,26 @@
+---
+common_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - python3
+  - python3-pip
+  - jq
+  - net-tools
+  - ufw
+  - ntp
+  - htop
+  - iotop
+
+common_sysctl_params:
+  vm.swappiness: 10
+  vm.max_map_count: 262144
+  net.core.somaxconn: 65535
+  net.ipv4.tcp_max_syn_backlog: 65535
+  net.core.netdev_max_backlog: 65535
+  fs.file-max: 1000000
+
+common_ulimit_nofile: 100000

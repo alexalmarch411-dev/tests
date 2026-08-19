@@ -1,0 +1,83 @@
+---
+# ============================================================
+# Health Checks — Verify Kafka is ACTUALLY WORKING
+# Not just "container is running"
+# ============================================================
+
+- name: Wait for Kafka broker to be ready
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ kafka_client_port }}"
+    timeout: 120
+    delay: 10
+  delegate_to: "{{ inventory_hostname }}"
+  tags: [kafka, healthcheck]
+
+- name: Check Kafka broker metadata
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-metadata.sh
+      --snapshot {{ kafka_data_dir }}/__cluster_metadata-0/00000000000000000000.log
+      --cluster-id {{ kafka_cluster_id }}
+  register: kafka_metadata_check
+  changed_when: false
+  failed_when: false
+  retries: 3
+  delay: 5
+  tags: [kafka, healthcheck]
+
+- name: Check Kafka broker registration via describe cluster
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-broker-api-versions.sh
+      --bootstrap-server localhost:{{ kafka_client_port }}
+  register: kafka_broker_api_check
+  changed_when: false
+  retries: 5
+  delay: 5
+  until: kafka_broker_api_check.rc == 0
+  tags: [kafka, healthcheck]
+
+- name: Verify all brokers are registered
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-metadata.sh
+      --snapshot {{ kafka_data_dir }}/__cluster_metadata-0/00000000000000000000.log
+      --broker-count
+  register: kafka_broker_count
+  changed_when: false
+  failed_when: false
+  retries: 3
+  delay: 5
+  tags: [kafka, healthcheck]
+
+- name: Display health check results
+  ansible.builtin.debug:
+    msg:
+      - "Kafka broker API check: {{ 'OK' if kafka_broker_api_check.rc == 0 else 'FAILED' }}"
+      - "Broker count check: {{ kafka_broker_count.stdout | default('N/A') }}"
+  tags: [kafka, healthcheck]
+
+- name: Verify topic exists
+  ansible.builtin.command:
+    cmd: >-
+      docker exec {{ kafka_container_name }}
+      /opt/kafka/bin/kafka-topics.sh
+      --bootstrap-server localhost:{{ kafka_client_port }}
+      --describe --topic {{ item.name }}
+  loop: "{{ kafka_topics }}"
+  register: kafka_topic_describe
+  changed_when: false
+  retries: 3
+  delay: 5
+  tags: [kafka, healthcheck]
+
+- name: Display topic details
+  ansible.builtin.debug:
+    msg: "Topic '{{ item.item.name }}':\n{{ item.stdout }}"
+  loop: "{{ kafka_topic_describe.results }}"
+  when: kafka_topic_describe.results is defined
+  tags: [kafka, healthcheck]

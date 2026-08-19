@@ -1,0 +1,24 @@
+---
+# ============================================================
+# Kafka Configuration — Jinja2 Template
+# ============================================================
+
+- name: Generate Kafka server.properties
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: "{{ kafka_host_data_dir }}/server.properties"
+    owner: kafka
+    group: kafka
+    mode: "0640"
+    backup: true
+  notify: Restart Kafka container
+  register: kafka_config_result
+
+- name: Generate Kafka log4j properties
+  ansible.builtin.template:
+    src: log4j.properties.j2
+    dest: "{{ kafka_host_data_dir }}/log4j.properties"
+    owner: kafka
+    group: kafka
+    mode: "0640"
+  notify: Restart Kafka container

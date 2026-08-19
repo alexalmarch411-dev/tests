@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Ansible
+*.retry
+ansible/inventories/*/group_vars/*.vault
+ansible/inventories/*/host_vars/*.vault
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+*.crt
+*.jks
+.env
+
+# Logs
+*.log
+
+# Temporary
+/tmp/
+.cache/

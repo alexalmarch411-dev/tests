@@ -1,0 +1,138 @@
+---
+- name: Create ClickHouse data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "101"
+    group: "101"
+    mode: "0750"
+  loop:
+    - "{{ clickhouse_host_data_dir }}"
+    - "{{ clickhouse_host_log_dir }}"
+  tags: [clickhouse, directories]
+
+- name: Create Docker network for ClickHouse
+  community.docker.docker_network:
+    name: "{{ clickhouse_docker_network }}"
+    state: present
+    driver: bridge
+  tags: [clickhouse, network]
+
+- name: Pull ClickHouse image
+  community.docker.docker_image:
+    name: "{{ clickhouse_image }}"
+    source: pull
+    force_source: false
+  tags: [clickhouse, image]
+
+- name: Deploy ClickHouse container
+  community.docker.docker_container:
+    name: "{{ clickhouse_container_name }}"
+    image: "{{ clickhouse_image }}"
+    state: started
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ clickhouse_docker_network }}"
+    ports:
+      - "{{ clickhouse_http_port }}:{{ clickhouse_http_port }}"
+      - "{{ clickhouse_native_port }}:{{ clickhouse_native_port }}"
+    volumes:
+      - "{{ clickhouse_host_data_dir }}:/var/lib/clickhouse"
+      - "{{ clickhouse_host_log_dir }}:/var/log/clickhouse-server"
+    ulimits:
+      - "nofile:262144:262144"
+    memory: "2g"
+    stop_timeout: 60
+  tags: [clickhouse, container]
+
+- name: Wait for ClickHouse to be ready
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ clickhouse_http_port }}/ping"
+    method: GET
+    status_code: 200
+  register: clickhouse_ping
+  retries: 30
+  delay: 5
+  until: clickhouse_ping.status == 200
+  tags: [clickhouse, wait]
+
+- name: Create analytics database
+  community.docker.docker_container_exec:
+    container: "{{ clickhouse_container_name }}"
+    command: >-
+      clickhouse-client --query
+      "CREATE DATABASE IF NOT EXISTS analytics"
+  tags: [clickhouse, database]
+
+- name: Create Kafka engine table
+  ansible.builtin.template:
+    src: create_kafka_table.sql.j2
+    dest: /tmp/create_kafka_table.sql
+  delegate_to: localhost
+  become: false
+  tags: [clickhouse, tables]
+
+- name: Copy Kafka table creation SQL
+  ansible.builtin.copy:
+    src: /tmp/create_kafka_table.sql
+    dest: /tmp/create_kafka_table.sql
+    owner: root
+    mode: "0644"
+  tags: [clickhouse, tables]
+
+- name: Create Kafka engine table in ClickHouse
+  ansible.builtin.shell: |
+    docker exec -i {{ clickhouse_container_name }} clickhouse-client \
+      --query "$(cat /tmp/create_kafka_table.sql)"
+  args:
+    executable: /bin/bash
+  register: clickhouse_kafka_table_result
+  changed_when: "'already exists' not in clickhouse_kafka_table_result.stderr | default('')"
+  failed_when:
+    - clickhouse_kafka_table_result.rc != 0
+    - "'already exists' not in clickhouse_kafka_table_result.stderr | default('')"
+  tags: [clickhouse, tables]
+
+- name: Create MergeTree destination table
+  ansible.builtin.shell: |
+    docker exec -i {{ clickhouse_container_name }} clickhouse-client --query "
+    CREATE TABLE IF NOT EXISTS analytics.events (
+      event_id UUID,
+      user_id String,
+      event_type LowCardinality(String),
+      timestamp DateTime64(3),
+      page String,
+      session_id String
+    ) ENGINE = MergeTree()
+    PARTITION BY toYYYYMM(timestamp)
+    ORDER BY (event_type, timestamp, event_id)
+    TTL timestamp + INTERVAL 30 DAY
+    SETTINGS index_granularity = 8192
+    "
+  register: clickhouse_mergetree_result
+  changed_when: "'already exists' not in clickhouse_mergetree_result.stderr | default('')"
+  failed_when:
+    - clickhouse_mergetree_result.rc != 0
+    - "'already exists' not in clickhouse_mergetree_result.stderr | default('')"
+  tags: [clickhouse, tables]
+
+- name: Create Materialized View
+  ansible.builtin.shell: |
+    docker exec -i {{ clickhouse_container_name }} clickhouse-client --query "
+    CREATE MATERIALIZED VIEW IF NOT EXISTS analytics.events_mv
+    TO analytics.events AS
+    SELECT
+      event_id,
+      user_id,
+      event_type,
+      timestamp,
+      page,
+      session_id
+    FROM analytics.events_kafka
+    "
+  register: clickhouse_mv_result
+  changed_when: "'already exists' not in clickhouse_mv_result.stderr | default('')"
+  failed_when:
+    - clickhouse_mv_result.rc != 0
+    - "'already exists' not in clickhouse_mv_result.stderr | default('')"
+  tags: [clickhouse, tables]

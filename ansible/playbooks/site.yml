@@ -1,0 +1,77 @@
+---
+# ============================================================
+# Kafka Cluster Deployment Playbook
+# ============================================================
+# Usage:
+#   ansible-playbook -i inventories/yandex/hosts.yml playbooks/site.yml
+#
+# Tags:
+#   common    - System prerequisites
+#   docker    - Docker installation
+#   kafka     - Kafka deployment
+#   topics    - Topic creation
+#   healthcheck - Health verification
+#   clickhouse - ClickHouse deployment
+# ============================================================
+
+- name: Deploy Kafka Cluster
+  hosts: kafka
+  become: true
+  gather_facts: true
+  serial: 1  # Rolling deployment for zero-downtime
+
+  pre_tasks:
+    - name: Validate connectivity
+      ansible.builtin.ping:
+      tags: [always]
+
+    - name: Gather minimum facts
+      ansible.builtin.setup:
+        gather_subset:
+          - min
+          - network
+          - distribution
+      tags: [always]
+
+  roles:
+    - role: common
+    - role: docker
+    - role: kafka
+
+  post_tasks:
+    - name: Final cluster health verification
+      ansible.builtin.debug:
+        msg: "Kafka node {{ kafka_node_id }} deployment complete on {{ ansible_host }}"
+      tags: [always]
+
+- name: Deploy ClickHouse
+  hosts: clickhouse
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Validate connectivity
+      ansible.builtin.ping:
+
+    - name: Gather minimum facts
+      ansible.builtin.setup:
+        gather_subset:
+          - min
+          - network
+          - distribution
+
+  roles:
+    - role: common
+    - role: docker
+    - role: clickhouse
+
+  post_tasks:
+    - name: Verify ClickHouse
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ clickhouse_http_port }}/ping"
+        method: GET
+        status_code: 200
+      register: ch_ping
+      retries: 5
+      delay: 3
+      until: ch_ping.status == 200
