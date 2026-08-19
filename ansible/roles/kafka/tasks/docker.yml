@@ -25,11 +25,10 @@
     state: started
     restart_policy: unless-stopped
     restart: "{{ kafka_config_result is defined and kafka_config_result.changed | default(false) }}"
-    networks:
-      - name: "{{ kafka_docker_network }}"
-    ports:
-      - "{{ kafka_client_port }}:{{ kafka_client_port }}"
-      - "{{ kafka_controller_port }}:{{ kafka_controller_port }}"
+    # Host network: KRaft-кворум требует, чтобы нода могла достучаться до собственного
+    # advertised IP. В bridge-сети hairpin NAT не работает — heartbeat к себе таймаутится.
+    # Kafka сама управляет listeners (0.0.0.0), поэтому host-сеть безопасна.
+    network_mode: host
     volumes:
       - "{{ kafka_host_data_dir }}/data:{{ kafka_data_dir }}"
       # Образ apache/kafka читает смонтированные конфиги из /mnt/shared/config
