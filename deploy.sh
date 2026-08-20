@@ -252,7 +252,11 @@ echo ""
 log "Запуск health check..."
 if [ -f "${ANSIBLE_DIR}/scripts/health_check.sh" ]; then
     if [ -n "${KAFKA_1_PUBLIC_IP:-}" ]; then
-        bash "${ANSIBLE_DIR}/scripts/health_check.sh" "${KAFKA_1_PUBLIC_IP}" 9092 kafka-broker || \
+        # Health check выполняется НА ноде: скрипт использует локальные docker-команды.
+        # Запуск на Mac падал (нет Docker-демона). Скрипт передаётся через stdin,
+        # KAFKA_HOST=127.0.0.1 — внутри ноды проверяем локальный брокер.
+        ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no "ubuntu@${KAFKA_1_PUBLIC_IP}" \
+            "bash -s" 127.0.0.1 9092 kafka-broker < "${ANSIBLE_DIR}/scripts/health_check.sh" || \
             warn "Health check предупредил о проблемах — проверьте логи"
     fi
 fi

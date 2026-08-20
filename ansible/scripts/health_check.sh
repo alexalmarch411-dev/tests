@@ -23,13 +23,13 @@ check() {
     local result="$2"
     if [ "$result" = "0" ]; then
         echo -e "  ${GREEN}PASS${NC}: $name"
-        ((PASS++))
+        PASS=$((PASS+1))
     elif [ "$result" = "1" ]; then
         echo -e "  ${RED}FAIL${NC}: $name"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
     else
         echo -e "  ${YELLOW}WARN${NC}: $name"
-        ((WARN++))
+        WARN=$((WARN+1))
     fi
 }
 
