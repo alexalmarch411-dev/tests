@@ -1,18 +1,4 @@
 ---
-- name: Restart Kafka container
-  community.docker.docker_container:
-    name: "{{ kafka_container_name }}"
-    state: started
-    restart: true
-    timeout: 120
-  listen: Restart Kafka container
-
-- name: Wait for Kafka after restart
-  ansible.builtin.wait_for:
-    host: "127.0.0.1"
-    port: "{{ kafka_client_port }}"
-    timeout: 120
-    delay: 10
-    state: started
-  delegate_to: "{{ inventory_hostname }}"
-  listen: Restart Kafka container
+# NOTE: Рестарт контейнера больше не используется как handler.
+# docker.yml сам пересоздаёт контейнер при изменении конфигурации
+# (restart: "{{ kafka_config_result.changed }}").

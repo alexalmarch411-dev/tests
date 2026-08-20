@@ -7,9 +7,9 @@ CREATE TABLE IF NOT EXISTS analytics.events_kafka (
   session_id String
 ) ENGINE = Kafka()
 SETTINGS
-  bootstrap_servers = '{{ clickhouse_kafka_bootstrap_servers | trim }}',
-  topic = 'analytics.events',
-  group_name = 'clickhouse_analytics_consumer',
-  format = 'JSONEachRow',
-  num_consumers = 3,
-  skip_broken_messages = 100;
+  kafka_broker_list = '{{ clickhouse_kafka_bootstrap_servers | trim }}',
+  kafka_topic_list = 'analytics.events',
+  kafka_group_name = 'clickhouse_analytics_consumer',
+  kafka_format = 'JSONEachRow',
+  kafka_num_consumers = 3,
+  kafka_skip_broken_messages = 100;

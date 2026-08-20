@@ -12,6 +12,6 @@ clickhouse_native_port: 9000
 clickhouse_kafka_bootstrap_servers: >-
   {% set brokers = [] %}
   {% for host in groups['kafka'] %}
-  {%   set _ = brokers.append(hostvars[host]['kafka_internal_ip'] ~ ':' ~ kafka_client_port) %}
+  {%   set _ = brokers.append(hostvars[host]['kafka_internal_ip'] ~ ':' ~ hostvars[host]['kafka_client_port']) %}
   {% endfor %}
   {{ brokers | join(',') }}

@@ -1,4 +1,23 @@
 ---
+- name: Force apt to use IPv4
+  ansible.builtin.copy:
+    content: |
+      Acquire::ForceIPv4 "true";
+      Acquire::Retries "10";
+      Acquire::http::Timeout "120";
+      Acquire::https::Timeout "120";
+      Acquire::ftp::Timeout "120";
+    dest: /etc/apt/apt.conf.d/99force-ipv4
+    mode: "0644"
+  tags: [common, packages]
+
+- name: Prefer IPv4 in gai.conf
+  ansible.builtin.lineinfile:
+    path: /etc/gai.conf
+    regexp: '^#?precedence ::ffff:0:0/96\s+100'
+    line: 'precedence ::ffff:0:0/96  100'
+  tags: [common, packages]
+
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true

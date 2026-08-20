@@ -1,4 +1,5 @@
 ---
+docker_apt_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
 docker_apt_url: "https://download.docker.com/linux/ubuntu"
 docker_apt_key_url: "https://download.docker.com/linux/ubuntu/gpg"
 docker_packages:

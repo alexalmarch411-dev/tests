@@ -44,6 +44,42 @@
         msg: "Kafka node {{ kafka_node_id }} deployment complete on {{ ansible_host }}"
       tags: [always]
 
+# ============================================================
+# Finalize Kafka Cluster
+# Выполняется ПОСЛЕ развёртывания всех нод.
+# KRaft-кворум требует большинства (2 из 3) — поэтому топики
+# и healthcheck нельзя делать внутри serial:1 роли.
+# ============================================================
+- name: Finalize Kafka Cluster
+  hosts: kafka
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Wait for all Kafka brokers to become available
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ kafka_client_port }}"
+        timeout: 120
+        delay: 10
+        state: started
+      delegate_to: "{{ inventory_hostname }}"
+      retries: 3
+      delay: 5
+      register: kafka_finalize_wait
+      tags: [kafka, topics, healthcheck]
+
+    - name: Create Kafka topics (run once)
+      ansible.builtin.include_tasks:
+        file: "../roles/kafka/tasks/topics.yml"
+      run_once: true
+      tags: [kafka, topics]
+
+    - name: Run Kafka health checks (run once)
+      ansible.builtin.include_tasks:
+        file: "../roles/kafka/tasks/healthcheck.yml"
+      run_once: true
+      tags: [kafka, healthcheck]
+
 - name: Deploy ClickHouse
   hosts: clickhouse
   become: true

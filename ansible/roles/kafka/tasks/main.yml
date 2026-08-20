@@ -32,11 +32,5 @@
   when: kafka_firewall_enabled | default(true)
   tags: [kafka, firewall]
 
-- name: Include topic tasks
-  ansible.builtin.include_tasks: topics.yml
-  run_once: true
-  tags: [kafka, topics]
-
-- name: Include health check tasks
-  ansible.builtin.include_tasks: healthcheck.yml
-  tags: [kafka, healthcheck]
+# NOTE: topics.yml и healthcheck.yml выполняются в финальном play "Finalize Kafka Cluster"
+# (site.yml) ПОСЛЕ развёртывания ВСЕХ нод — KRaft-кворум требует 2 из 3 нод.

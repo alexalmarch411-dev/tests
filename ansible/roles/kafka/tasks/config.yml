@@ -3,6 +3,19 @@
 # Kafka Configuration — Jinja2 Template
 # ============================================================
 
+- name: Check server.properties path type
+  ansible.builtin.stat:
+    path: "{{ kafka_host_data_dir }}/server.properties"
+  register: kafka_server_props_stat
+
+- name: Remove erroneous directory at server.properties path
+  ansible.builtin.file:
+    path: "{{ kafka_host_data_dir }}/server.properties"
+    state: absent
+  when:
+    - kafka_server_props_stat.stat.exists
+    - kafka_server_props_stat.stat.isdir
+
 - name: Generate Kafka server.properties
   ansible.builtin.template:
     src: server.properties.j2
@@ -13,7 +26,6 @@
     # Файл не содержит секретов (PLAINTEXT) — мирно-читаемый безопасно.
     mode: "0644"
     backup: true
-  notify: Restart Kafka container
   register: kafka_config_result
 
 - name: Generate Kafka log4j properties
@@ -23,4 +35,4 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart Kafka container
+  register: kafka_config_result

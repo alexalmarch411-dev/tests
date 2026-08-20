@@ -49,12 +49,6 @@
   register: kafka_container_result
   tags: [kafka, docker, container]
 
-- name: Wait for Kafka to become available
-  ansible.builtin.wait_for:
-    host: "127.0.0.1"
-    port: "{{ kafka_client_port }}"
-    timeout: 120
-    delay: 5
-    state: started
-  delegate_to: "{{ inventory_hostname }}"
-  tags: [kafka, docker, wait]
+# NOTE: Ждать порт здесь НЕЛЬЗЯ. С serial:1 эта нода разворачивается раньше остальных,
+# а KRaft-кворум требует 2 из 3 нод. Ожидание готовности вынесено в отдельный play
+# "Finalize Kafka Cluster" (site.yml), который выполняется после развёртывания всех нод.

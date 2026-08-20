@@ -106,7 +106,7 @@
     ) ENGINE = MergeTree()
     PARTITION BY toYYYYMM(timestamp)
     ORDER BY (event_type, timestamp, event_id)
-    TTL timestamp + INTERVAL 30 DAY
+    TTL toDateTime(timestamp) + INTERVAL 30 DAY
     SETTINGS index_granularity = 8192
     "
   register: clickhouse_mergetree_result
